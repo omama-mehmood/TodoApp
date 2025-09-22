@@ -1,68 +1,59 @@
 using Microsoft.AspNetCore.Mvc;
-using System.Collections.Generic;
 using TodoApp.Models;
 using TodoApp.Services;
 
-namespace TodoApp.Controllers
+namespace TodoApp.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class TodoController(ITodoService todoService) : ControllerBase
 {
-    [ApiController]
-    [Route("api/[controller]")]
-    public class TodoController : ControllerBase
+    [HttpGet]
+    public ActionResult<IEnumerable<TodoItem>> Get()
     {
-        private readonly ITodoService _todoService;
+        return Ok(todoService.GetAll());
+    }
 
-        public TodoController(ITodoService todoService)
-        {
-            _todoService = todoService;
-        }
+    [HttpGet("{id}")]
+    public ActionResult<TodoItem> Get(int id)
+    {
+        var todo = todoService.GetById(id);
+        if (todo == null)
+            return NotFound();
 
-        [HttpGet]
-        public ActionResult<IEnumerable<TodoItem>> Get()
-        {
-            return Ok(_todoService.GetAll());
-        }
+        return Ok(todo);
+    }
 
-        [HttpGet("{id}")]
-        public ActionResult<TodoItem> Get(int id)
-        {
-            var todo = _todoService.GetById(id);
-            if (todo == null)
-                return NotFound();
+    [HttpPost]
+    public ActionResult<TodoItem> Post([FromBody] TodoItem todo)
+    {
+        if (string.IsNullOrWhiteSpace(todo.Title))
+            return BadRequest("Title is required");
 
-            return Ok(todo);
-        }
+        var createdTodo = todoService.Create(todo);
+        return CreatedAtAction(nameof(Get), new { id = createdTodo.Id }, createdTodo);
+    }
 
-        [HttpPost]
-        public ActionResult<TodoItem> Post([FromBody] TodoItem todo)
-        {
-            if (string.IsNullOrWhiteSpace(todo.Title))
-                return BadRequest("Title is required");
+    [HttpPut("{id}")]
+    public ActionResult<TodoItem> Put(int id, [FromBody] TodoItem todo)
+    {
+        if (string.IsNullOrWhiteSpace(todo.Title))
+            return BadRequest("Title is required");
 
-            var createdTodo = _todoService.Create(todo);
-            return CreatedAtAction(nameof(Get), new { id = createdTodo.Id }, createdTodo);
-        }
+        var updatedTodo = todoService.Update(id, todo);
+        if (updatedTodo == null)
+            return NotFound();
 
-        [HttpPut("{id}")]
-        public ActionResult<TodoItem> Put(int id, [FromBody] TodoItem todo)
-        {
-            if (string.IsNullOrWhiteSpace(todo.Title))
-                return BadRequest("Title is required");
+        return Ok(updatedTodo);
+    }
 
-            var updatedTodo = _todoService.Update(id, todo);
-            if (updatedTodo == null)
-                return NotFound();
+    [HttpDelete("{id}")]
+    public IActionResult Delete(int id)
+    {
+        var deleted = todoService.Delete(id);
+        if (!deleted)
+            return NotFound();
 
-            return Ok(updatedTodo);
-        }
-
-        [HttpDelete("{id}")]
-        public IActionResult Delete(int id)
-        {
-            var deleted = _todoService.Delete(id);
-            if (!deleted)
-                return NotFound();
-
-            return NoContent();
-        }
+        return NoContent();
     }
 }
