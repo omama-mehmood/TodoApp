@@ -1,65 +1,63 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Collections.Concurrent;
 using TodoApp.Models;
 
-namespace TodoApp.Services
+namespace TodoApp.Services;
+
+public class TodoService : ITodoService
 {
-    public class TodoService : ITodoService
+    private readonly ConcurrentDictionary<int, TodoItem> _todos = [];
+    private int _nextId = 1;
+
+    public IEnumerable<TodoItem> GetAll()
     {
-        private readonly List<TodoItem> _todos;
-        private int _nextId;
+        return _todos.Values.OrderBy(t => t.CreatedAt);
+    }
 
-        public TodoService()
+    public TodoItem? GetById(int id)
+    {
+        return _todos.TryGetValue(id, out var todo) ? todo : null;
+    }
+
+    public TodoItem Create(TodoItem todo)
+    {
+        var id = Interlocked.Increment(ref _nextId);
+        var newTodo = new TodoItem
         {
-            _todos = new List<TodoItem>();
-            _nextId = 1;
-        }
+            Id = id,
+            Title = todo.Title,
+            Description = todo.Description,
+            IsCompleted = false,
+            CreatedAt = DateTime.UtcNow
+        };
+        
+        _todos[id] = newTodo;
+        return newTodo;
+    }
 
-        public IEnumerable<TodoItem> GetAll()
+    public TodoItem? Update(int id, TodoItem todo)
+    {
+        if (!_todos.TryGetValue(id, out var existingTodo))
+            return null;
+
+        existingTodo.Title = todo.Title;
+        existingTodo.Description = todo.Description;
+        
+        var wasCompleted = existingTodo.IsCompleted;
+        existingTodo.IsCompleted = todo.IsCompleted;
+
+        // Update completion timestamp
+        existingTodo.CompletedAt = todo.IsCompleted switch
         {
-            return _todos;
-        }
+            true when !wasCompleted => DateTime.UtcNow,
+            false => null,
+            _ => existingTodo.CompletedAt
+        };
 
-        public TodoItem GetById(int id)
-        {
-            return _todos.FirstOrDefault(t => t.Id == id);
-        }
+        return existingTodo;
+    }
 
-        public TodoItem Create(TodoItem todo)
-        {
-            todo.Id = _nextId++;
-            todo.CreatedAt = DateTime.UtcNow;
-            _todos.Add(todo);
-            return todo;
-        }
-
-        public TodoItem Update(int id, TodoItem todo)
-        {
-            var existingTodo = GetById(id);
-            if (existingTodo == null)
-                return null;
-
-            existingTodo.Title = todo.Title;
-            existingTodo.Description = todo.Description;
-            existingTodo.IsCompleted = todo.IsCompleted;
-
-            if (todo.IsCompleted && existingTodo.CompletedAt == null)
-                existingTodo.CompletedAt = DateTime.UtcNow;
-            else if (!todo.IsCompleted)
-                existingTodo.CompletedAt = null;
-
-            return existingTodo;
-        }
-
-        public bool Delete(int id)
-        {
-            var todo = GetById(id);
-            if (todo == null)
-                return false;
-
-            _todos.Remove(todo);
-            return true;
-        }
+    public bool Delete(int id)
+    {
+        return _todos.TryRemove(id, out _);
     }
 }
